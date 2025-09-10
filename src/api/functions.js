@@ -11,3 +11,5 @@ export const updateBook = base44.functions.updateBook;
 
 export const getBasketAvailabilitySummary = base44.functions.getBasketAvailabilitySummary;
 
+export const deleteMyAccount = base44.functions.deleteMyAccount;
+

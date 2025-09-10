@@ -14,6 +14,7 @@ import {
   SelectValue } from
 "@/components/ui/select";
 import { SUBJECTS } from "../constants/subjects";
+import { formatPrice } from "../utils/formatPrice";
 
 export default function BookDetails({
   book,
@@ -123,14 +124,22 @@ export default function BookDetails({
                         </div>
 
                         {/* Recommended Price Input */}
-                        <div>
-                            <Label htmlFor="recommended_price">מחיר מומלץ (באגורות)</Label>
+                        <div className="text-right">
+                            <Label htmlFor="recommended_price" className="text-sm font-medium">מחיר מומלץ (בשקלים)</Label>
                             <Input
               id="recommended_price"
+              name="recommended_price"
               type="number"
-              value={editFormData?.recommended_price || 0}
-              onChange={(e) => setEditFormData((prev) => ({ ...prev, recommended_price: parseInt(e.target.value, 10) || 0 }))}
-              className="mt-1 text-right" />
+              min="0"
+              step="0.01"
+              placeholder="למשל 20.00"
+              value={(editFormData.recommended_price ?? 0) / 100}
+              onChange={(e) => {
+                const shekels = parseFloat(e.target.value);
+                const agorot = Math.round(shekels * 100);
+                setEditFormData((prev) => ({ ...prev, recommended_price: isNaN(agorot) ? null : agorot }));
+              }}
+              className="w-32" />
 
                         </div>
 
@@ -155,14 +164,23 @@ export default function BookDetails({
                             <h2 className="text-2xl font-bold text-gray-900 mb-2">
                                 {displayBook?.title_he || "ספר ללא שם"}
                             </h2>
+                             {displayBook?.status === 'removed_from_catalog' &&
+            <Badge className="bg-red-100 text-red-800 text-xs whitespace-nowrap mb-2">
+                                    הוסר מקטלוג הספרים
+                                </Badge>
+            }
                             {displayBook?.subject &&
             <p className="text-gray-600 mb-3">{displayBook.subject}</p>
             }
-                            {displayBook?.recommended_price &&
-            <p className="text-sm text-gray-500 mb-3">
-                                    מחיר מומלץ: ₪{(displayBook.recommended_price / 100).toFixed(2)}
-                                </p>
-            }
+                            {/* Recommended Price Display */}
+                            {displayBook?.recommended_price || displayBook?.recommended_price === 0 ?
+            <div className="text-right">
+                                    <p>
+                                        <span className="text-sm font-medium text-gray-500">מחיר מומלץ: </span>
+                                        <span className="text-sm font-bold">{formatPrice(displayBook.recommended_price)}</span>
+                                    </p>
+                                </div> :
+            null}
                             {displayBook?.admin_note &&
             <p className="text-sm text-gray-500 mb-3">
                                     <span className="font-semibold">הערות: </span>

@@ -1,51 +1,56 @@
-
-import React from 'react';
-import { Badge } from "@/components/ui/badge";
+import React from "react";
 import { Button } from "@/components/ui/button";
-import { Loader2, BookOpenCheck } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import BookAvailabilityBadge from "../common/BookAvailabilityBadge";
 
-export default function AvailabilityAndBasket({ 
-    currentUser, 
-    count, 
-    isBookInBasket, 
-    basketActionLoading, 
-    onAddToBasket, 
-    onRemoveFromBasket 
+export default function AvailabilityAndBasket({
+    currentUser,
+    count,
+    isBookInBasket,
+    basketActionLoading,
+    onAddToBasket,
+    onRemoveFromBasket
 }) {
     return (
-        <div className="space-y-2 bg-gray-50 p-4 rounded-lg border">
-            <span className="font-semibold text-gray-700 text-sm text-right block w-full">זמינים ביריד:</span>
-            <div className="grid grid-cols-[auto_1fr] items-center gap-4 min-w-0">
-                {/* Availability Count */}
-                <div className="flex-shrink-0">
-                    {count > 0 ? (
-                        <Badge className="bg-green-100 text-green-800 text-lg px-3 py-1 flex items-center gap-1.5">
-                            <BookOpenCheck className="h-4 w-4" />
-                            <span>{count}</span>
-                        </Badge>
-                    ) : (
-                        <Badge variant="outline" className="text-sm text-gray-500 whitespace-nowrap">אין במלאי</Badge>
-                    )}
-                </div>
-                
-                {/* Basket Button */}
-                <div className="min-w-0">
-                    {currentUser ? (
-                        isBookInBasket ? (
-                            <Button variant="outline" className="w-full text-orange-600 border-orange-300 hover:bg-orange-50 hover:text-orange-700" onClick={onRemoveFromBasket} disabled={basketActionLoading}>
-                                {basketActionLoading ? <Loader2 className="h-4 w-4 animate-spin"/> : "הסר מהסל"}
-                            </Button>
-                        ) : (
-                            <Button variant="outline" className="w-full border-green-300 text-green-600 hover:bg-green-50" onClick={onAddToBasket} disabled={basketActionLoading}>
-                                 {basketActionLoading ? <Loader2 className="h-4 w-4 animate-spin"/> : "הוסף לסל"}
-                            </Button>
-                        )
-                    ) : (
-                        <p className="text-xs text-center text-gray-500 pt-2">התחבר/י כדי להוסיף לסל</p>
-                    )}
-                </div>
+        <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm w-full space-y-4">
+            {/* Availability */}
+            <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-600">זמינים ביריד:</span>
+                <BookAvailabilityBadge count={count} />
             </div>
+
+            {/* Basket Actions */}
+            {currentUser && (
+                <div className="pt-4 border-t border-gray-100">
+                    {isBookInBasket ? (
+                        <Button
+                            variant="outline"
+                            onClick={onRemoveFromBasket}
+                            disabled={basketActionLoading}
+                            className="w-full text-orange-600 border-orange-300 hover:bg-orange-50 hover:text-orange-700"
+                        >
+                            {basketActionLoading ? (
+                                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                "הסר מהסל"
+                            )}
+                        </Button>
+                    ) : (
+                        <Button
+                            variant="outline"
+                            onClick={onAddToBasket}
+                            disabled={basketActionLoading}
+                            className="w-full text-green-600 border-green-300 hover:bg-green-50 hover:text-green-700"
+                        >
+                            {basketActionLoading ? (
+                                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                "הוסף לסל"
+                            )}
+                        </Button>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
-

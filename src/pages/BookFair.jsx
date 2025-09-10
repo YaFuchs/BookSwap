@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,15 +15,26 @@ import ProfileEditDialog from "../components/user/ProfileEditDialog";
 import MobileFilterSheet from "../components/common/MobileFilterSheet";
 import { getBasketAvailabilitySummary } from "@/api/functions";
 import HintBar from "../components/catalog/HintBar";
+import useAppStore from "../components/stores/useAppStore";
+import ActiveMobileFilters from "../components/common/ActiveMobileFilters";
 
-export default function BookFairPage() {
+export default function BookFairPage({ setPageMobileFilterOpener }) {
   const [groupedResults, setGroupedResults] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState({ grade_numbers: [], title_q: "" });
-  const [debouncedTitle, setDebouncedTitle] = useState(filters.title_q);
+
+  const {
+    filters,
+    setFilters,
+    debouncedTitleQ, // Use the debounced version from store
+    setTitleQDebounced, // Use the debounced setter
+    showMyBasketOnly,
+    setShowMyBasketOnly,
+    showMyBooksOnly,
+    setShowMyBooksOnly,
+    resetFilters: globalResetFilters, // Rename to avoid conflict with local function
+  } = useAppStore();
+
   const [user, setUser] = useState(null);
-  const [showMyBooksOnly, setShowMyBooksOnly] = useState(false);
-  const [showMyBasketOnly, setShowMyBasketOnly] = useState(false);
   const [myBasketBookIds, setMyBasketBookIds] = useState([]);
   const [myListings, setMyListings] = useState([]);
   const [showProfileCompletionDialog, setShowProfileCompletionDialog] = useState(false);
@@ -40,47 +50,32 @@ export default function BookFairPage() {
   const hasActiveFilters = React.useCallback(() => {
     return (
       Array.isArray(filters.grade_numbers) && filters.grade_numbers.length > 0 ||
-      debouncedTitle && debouncedTitle.trim().length > 0 ||
+      debouncedTitleQ && debouncedTitleQ.trim().length > 0 ||
       showMyBooksOnly ||
       showMyBasketOnly);
 
-  }, [filters.grade_numbers, debouncedTitle, showMyBooksOnly, showMyBasketOnly]);
-
-  // Dispatch filter status updates
-  React.useEffect(() => {
-    const isActive = hasActiveFilters();
-    document.dispatchEvent(new CustomEvent('filter-status-update', {
-      detail: { hasActiveFilters: isActive }
-    }));
-  }, [hasActiveFilters]);
-
-  useEffect(() => {
-    const timerId = setTimeout(() => {
-      setDebouncedTitle(filters.title_q);
-    }, 300);
-    return () => clearTimeout(timerId);
-  }, [filters.title_q]);
+  }, [filters.grade_numbers, debouncedTitleQ, showMyBooksOnly, showMyBasketOnly]);
 
   const fetchBasketSummary = useCallback(async (basketIds) => {
     if (!basketIds || basketIds.length === 0) {
-        setBasketAvailabilitySummary({ availableBooksCount: 0, uniqueSellersCount: 0 });
-        return;
+      setBasketAvailabilitySummary({ availableBooksCount: 0, uniqueSellersCount: 0 });
+      return;
     }
     setLoadingSummary(true);
     try {
-        const response = await getBasketAvailabilitySummary({ basketBookIds: basketIds });
-        if (response && response.data) {
-            setBasketAvailabilitySummary(response.data);
-        }
+      const response = await getBasketAvailabilitySummary({ basketBookIds: basketIds });
+      if (response && response.data) {
+        setBasketAvailabilitySummary(response.data);
+      }
     } catch (error) {
-        console.error("Error fetching basket availability summary:", error);
-        setBasketAvailabilitySummary({ availableBooksCount: 0, uniqueSellersCount: 0 });
+      console.error("Error fetching basket availability summary:", error);
+      setBasketAvailabilitySummary({ availableBooksCount: 0, uniqueSellersCount: 0 });
     } finally {
-        setLoadingSummary(false);
+      setLoadingSummary(false);
     }
   }, []);
 
-  // useEffect for initial user data and event listener setup
+  // useEffect for initial user data
   useEffect(() => {
     const loadUserOnly = async () => {
       try {
@@ -94,16 +89,16 @@ export default function BookFairPage() {
       }
     };
     loadUserOnly();
-
-    // Listen for the custom event dispatched from the layout's filter button
-    const openSheet = () => setIsMobileFilterOpen(true);
-    document.addEventListener('open-mobile-filters', openSheet);
-
-    // Cleanup the event listener on component unmount
-    return () => {
-      document.removeEventListener('open-mobile-filters', openSheet);
-    };
   }, []); // Empty dependency array means this runs once on mount
+  
+  // useEffect to register the mobile filter opener with parent
+  useEffect(() => {
+    if (setPageMobileFilterOpener) {
+        setPageMobileFilterOpener(() => () => setIsMobileFilterOpen(true));
+        // Cleanup function to unregister when component unmounts
+        return () => setPageMobileFilterOpener(null);
+    }
+  }, [setPageMobileFilterOpener, setIsMobileFilterOpen]);
 
   // Add event listener for My Basket activation
   useEffect(() => {
@@ -116,14 +111,13 @@ export default function BookFairPage() {
     return () => {
       document.removeEventListener('activate-my-basket-filter', handleMyBasketActivation);
     };
-  }, []);
+  }, [setShowMyBasketOnly]);
 
   const performSearch = useCallback(async () => {
     setLoading(true);
+    let fetchedMyListings = [];
+    let fetchedMyBasketBookIds = [];
     try {
-      let fetchedMyListings = [];
-      let fetchedMyBasketBookIds = [];
-
       // Always re-fetch current user's listings and basket data
       // This ensures the counts on the filter buttons are up-to-date
       // whenever a search operation (initial load, filter change, refresh) occurs.
@@ -146,18 +140,19 @@ export default function BookFairPage() {
       // Perform the actual book search using potentially newly fetched myBasketBookIds
       const results = await BookSearch({
         grade_numbers: filters.grade_numbers,
-        title_q: debouncedTitle,
+        title_q: debouncedTitleQ,
         basketBookIds: showMyBasketOnly ? fetchedMyBasketBookIds : null, // Use freshly fetched IDs
         sellerId: showMyBooksOnly ? user?.id : null
       });
-      setGroupedResults(results);
+      setGroupedResults(Array.isArray(results) ? results : []);
 
     } catch (error) {
       console.error("Error performing search via integration:", error);
       setGroupedResults([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }, [debouncedTitle, filters.grade_numbers, showMyBasketOnly, showMyBooksOnly, user?.id]);
+  }, [debouncedTitleQ, filters.grade_numbers, showMyBasketOnly, showMyBooksOnly, user?.id]);
 
   useEffect(() => {
     performSearch();
@@ -166,32 +161,32 @@ export default function BookFairPage() {
   // New useEffect to fetch basket summary when basket changes
   useEffect(() => {
     if (user && myBasketBookIds) {
-        fetchBasketSummary(myBasketBookIds);
+      fetchBasketSummary(myBasketBookIds);
     }
   }, [user, myBasketBookIds, fetchBasketSummary]);
 
   // New useEffect to auto-apply "My Basket" filter on initial load
   useEffect(() => {
     // Only auto-apply once, when all data is ready and conditions are met
-    if (!hasAutoAppliedBasketFilter && 
-        !loading && // Ensure main search is not loading
-        !loadingSummary && 
-        myBasketBookIds.length > 0 && 
-        basketAvailabilitySummary.availableBooksCount > 0 &&
-        !showMyBasketOnly && // Don't override if already manually set
-        !showMyBooksOnly) { // Don't override if other filter is active
-      
+    if (!hasAutoAppliedBasketFilter &&
+      !loading && // Ensure main search is not loading
+      !loadingSummary &&
+      myBasketBookIds.length > 0 &&
+      basketAvailabilitySummary.availableBooksCount > 0 &&
+      !showMyBasketOnly && // Don't override if already manually set
+      !showMyBooksOnly) { // Don't override if other filter is active
+
       setShowMyBasketOnly(true);
       setHasAutoAppliedBasketFilter(true);
     }
-  }, [hasAutoAppliedBasketFilter, loading, loadingSummary, myBasketBookIds.length, basketAvailabilitySummary.availableBooksCount, showMyBasketOnly, showMyBooksOnly]);
+  }, [hasAutoAppliedBasketFilter, loading, loadingSummary, myBasketBookIds.length, basketAvailabilitySummary.availableBooksCount, showMyBasketOnly, showMyBooksOnly, setShowMyBasketOnly]);
 
 
   const handleListingDataChange = useCallback((updatedListing) => {
     setGroupedResults((prevResults) => {
       return prevResults.map((group) => {
         const updatedListings = group.listings.map((listing) =>
-        listing.id === updatedListing.id ? { ...listing, ...updatedListing } : listing
+          listing.id === updatedListing.id ? { ...listing, ...updatedListing } : listing
         );
         // Only update the group if its listings have changed to prevent unnecessary re-renders
         if (updatedListings === group.listings) {
@@ -203,27 +198,25 @@ export default function BookFairPage() {
   }, []);
 
   const resetFilters = () => {
-    setFilters({ grade_numbers: [], title_q: "" });
-    setShowMyBooksOnly(false);
-    setShowMyBasketOnly(false); // Reset basket filter as well
+    globalResetFilters();
     // By setting this to true, we prevent the auto-apply from running again after a manual clear.
-    setHasAutoAppliedBasketFilter(true); 
+    setHasAutoAppliedBasketFilter(true);
   };
 
   const handleGradeToggle = (gradeId) => {
-    setFilters((prev) => ({
-      ...prev,
-      grade_numbers: prev.grade_numbers.includes(gradeId) ?
-      prev.grade_numbers.filter((id) => id !== gradeId) :
-      [...prev.grade_numbers, gradeId]
-    }));
+    setFilters({
+      ...filters,
+      grade_numbers: filters.grade_numbers.includes(gradeId) ?
+        filters.grade_numbers.filter((id) => id !== gradeId) :
+        [...filters.grade_numbers, gradeId]
+    });
   };
 
   const removeGrade = (gradeId) => {
-    setFilters((prev) => ({
-      ...prev,
-      grade_numbers: prev.grade_numbers.filter((id) => id !== gradeId)
-    }));
+    setFilters({
+      ...filters,
+      grade_numbers: filters.grade_numbers.filter((id) => id !== gradeId)
+    });
   };
 
   const handleAddBookFromSearchEmptyState = () => {
@@ -259,10 +252,10 @@ export default function BookFairPage() {
 
 
   const filteredForDisplay = showMyBooksOnly ?
-  groupedResults.filter((group) => group.seller.id === user?.id) :
-  groupedResults.filter((group) => {
-    return group.seller.id !== user?.id && group.listings.some((listing) => listing.status === 'available');
-  });
+    groupedResults.filter((group) => group.seller.id === user?.id) :
+    groupedResults.filter((group) => {
+      return group.seller.id !== user?.id && group.listings.some((listing) => listing.status === 'available');
+    });
 
   const totalAvailableListings = filteredForDisplay.reduce((acc, group) => acc + group.matchCount, 0);
 
@@ -270,177 +263,177 @@ export default function BookFairPage() {
 
   return (
     <>
-        <div className="min-h-screen bg-gray-50">
-            {/* Sticky Header with Filters */}
-            <div className="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
-                {/* Desktop Header and Filters - completely hidden on mobile */}
-                <div className="hidden md:block">
-                    <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 space-y-4">
-                        <div className="flex justify-between items-center gap-4">
-                            <h1 className="text-3xl font-bold text-gray-900">יריד הספרים</h1>
-                        </div>
-                        <div className="flex items-center gap-4 flex-wrap mt-4">
-                            {/* Popover for Grade Selection */}
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button variant="outline" className="flex items-center gap-2">
-                                        שכבת לימוד
-                                        <ChevronDown className="w-4 h-4" />
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-80">
-                                    <div className="space-y-2">
-                                        <h4 className="font-medium text-right">בחירת שכבות לימוד</h4>
-                                        <div className="grid grid-cols-3 gap-2">
-                                            {GRADES.map((grade) =>
-                        <div key={grade.id} className="flex items-center gap-2 flex-row-reverse">
-                                                    <Checkbox
-                            id={`grade-${grade.id}`}
-                            checked={filters.grade_numbers.includes(grade.id)}
-                            onCheckedChange={() => handleGradeToggle(grade.id)} />
+      <div className="min-h-screen bg-gray-50">
+        {/* Sticky Header with Filters */}
+        <div className="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
+          {/* Desktop Header and Filters - completely hidden on mobile */}
+          <div className="hidden md:block">
+            <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 space-y-4">
+              <div className="flex justify-between items-center gap-4">
+                <h1 className="text-3xl font-bold text-gray-900">יריד הספרים</h1>
+              </div>
+              <div className="flex items-center gap-4 flex-wrap mt-4">
+                {/* Popover for Grade Selection */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="flex items-center gap-2">
+                      שכבת לימוד
+                      <ChevronDown className="w-4 h-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80">
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-right">בחירת שכבות לימוד</h4>
+                      <div className="grid grid-cols-3 gap-2">
+                        {GRADES.map((grade) =>
+                          <div key={grade.id} className="flex items-center gap-2 flex-row-reverse">
+                            <Checkbox
+                              id={`grade-${grade.id}`}
+                              checked={filters.grade_numbers.includes(grade.id)}
+                              onCheckedChange={() => handleGradeToggle(grade.id)} />
 
-                                                    <label htmlFor={`grade-${grade.id}`} className="text-sm cursor-pointer">
-                                                        {grade.name.replace('כיתה ', '')}
-                                                    </label>
-                                                </div>
+                            <label htmlFor={`grade-${grade.id}`} className="text-sm cursor-pointer">
+                              {grade.name.replace('כיתה ', '')}
+                            </label>
+                          </div>
                         )}
-                                        </div>
-                                    </div>
-                                </PopoverContent>
-                            </Popover>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
 
-                            {/* Grade Badges */}
-                            {filters.grade_numbers.length > 0 &&
-                <div className="flex flex-wrap gap-2">
-                                    {filters.grade_numbers.map((gradeId) => {
-                    const grade = GRADES.find((g) => g.id === gradeId);
-                    return grade ?
-                    <Badge key={gradeId} variant="secondary" className="flex items-center gap-1">
-                                                {grade.name.replace('כיתה ', '')}
-                                                <X
-                        className="w-3 h-3 cursor-pointer hover:text-red-500"
-                        onClick={() => removeGrade(gradeId)} />
+                {/* Grade Badges */}
+                {filters.grade_numbers.length > 0 &&
+                  <div className="flex flex-wrap gap-2">
+                    {filters.grade_numbers.map((gradeId) => {
+                      const grade = GRADES.find((g) => g.id === gradeId);
+                      return grade ?
+                        <Badge key={gradeId} variant="secondary" className="flex items-center gap-1">
+                          {grade.name.replace('כיתה ', '')}
+                          <X
+                            className="w-3 h-3 cursor-pointer hover:text-red-500"
+                            onClick={() => removeGrade(gradeId)} />
 
-                                            </Badge> :
-                    null;
-                  })}
-                                </div>
+                        </Badge> :
+                        null;
+                    })}
+                  </div>
                 }
 
-                            {/* Search Input */}
-                            <div className="relative w-full md:max-w-xs">
-                                <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                <Input
+                {/* Search Input */}
+                <div className="relative w-full md:max-w-xs">
+                  <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Input
                     placeholder="חפשו שם ספר..."
                     value={filters.title_q}
-                    onChange={(e) => setFilters((p) => ({ ...p, title_q: e.target.value }))}
-                    className="pr-10 w-full" />
+                    onChange={(e) => setTitleQDebounced(e.target.value)}
+                    className="pr-10 w-full"
+                  />
 
-                            </div>
+                </div>
 
-                            {/* Filter Chips */}
-                            <Button
+                {/* Filter Chips */}
+                <Button
                   onClick={handleMyBooksToggle}
                   className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                  showMyBooksOnly ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`
+                    showMyBooksOnly ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`
                   }>
-                                ספרים שפירסמתי ({myListings.filter(l => l.status === 'available').length})
-                            </Button>
-                            <Button
+                  ספרים שפירסמתי ({myListings.filter(l => l.status === 'available').length})
+                </Button>
+                <Button
                   onClick={handleMyBasketToggle}
                   className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                  showMyBasketOnly ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`
+                    showMyBasketOnly ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`
                   }>
 
-                                הסל שלי ({myBasketBookIds.length})
-                            </Button>
+                  הסל שלי ({myBasketBookIds.length})
+                </Button>
 
-                            {/* Reset Filters Button */}
-                            {hasActiveFilters() && (
-                                <Button variant="ghost" onClick={resetFilters} className="flex items-center gap-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50">
-                                    <RotateCcw className="w-4 h-4" /> נקה סינון
-                                </Button>
-                            )}
-                        </div>
-                    </div>
-                </div>
-                <HintBar
-                  user={user}
-                  pageType="fair"
-                  userListingsCount={myListings.filter(l => l.status === 'available').length}
-                  userBasketCount={myBasketBookIds.length}
-                  basketAvailabilitySummary={basketAvailabilitySummary}
-                  loadingSummary={loadingSummary}
-                  isMyBasketFilterActive={showMyBasketOnly}
-                />
-            </div>
-
-            <div className="max-w-7xl mx-auto p-4 md:p-6">
-                {!loading && (
-                    <div className="mb-6 flex items-center justify-between">
-                        <h2 className="text-lg font-semibold text-gray-800">
-                            תוצאות ({totalAvailableListings} ספרים זמינים)
-                        </h2>
-                        {hasActiveFilters() && (
-                          <Button 
-                            variant="ghost" 
-                            onClick={resetFilters} 
-                            className="flex items-center gap-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50 md:hidden"
-                            size="sm"
-                          >
-                            <RotateCcw className="w-4 h-4" />
-                            נקה סינון
-                          </Button>
-                        )}
-                    </div>
+                {/* Reset Filters Button */}
+                {hasActiveFilters() && (
+                  <Button variant="ghost" onClick={resetFilters} className="flex items-center gap-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50">
+                    <RotateCcw className="w-4 h-4" /> נקה סינון
+                  </Button>
                 )}
-                {loading ?
-          <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 text-blue-500 animate-spin" /></div> :
-          showMyBasketEmptyState ?
-          <Card className="border-0 shadow-lg">
-                        <CardContent className="text-center py-12">
-                            <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                            <h3 className="text-xl font-semibold text-gray-700 mb-2">הסל שלכם ריק</h3>
-                            <p className="text-gray-500">הוסיפו לסל ספרים שאתם מעוניינים להשיג</p>
-                            <Button variant="outline" onClick={() => window.location.href = createPageUrl("BookCatalog")} className="mt-4">
-                                חזרה לקטלוג
-                            </Button>
-                        </CardContent>
-                    </Card> :
-          showMyBooksOnly && filteredForDisplay.length === 0 ?
-          <Card className="border-0 shadow-lg text-center py-12">
-                        <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold text-gray-700">לא פרסמת ספרים למכירה</h3>
-                        <p className="text-gray-500">התחילו על ידי הוספת ספר למכירה</p>
-                        <Button onClick={handleAddBookFromSearchEmptyState} className="mt-4">
-                            הוסף ספר למכירה
-                        </Button>
-                    </Card> :
-          filteredForDisplay.length > 0 ?
-          <SellerGroupList
-            groupedResults={filteredForDisplay}
-            GRADES={GRADES}
-            user={user}
-            showMyBooksOnly={showMyBooksOnly}
-            onAddNewListingClick={handleAddBookFromSearchEmptyState}
-            onFullDataRefresh={performSearch}
-            onGranularUpdate={handleListingDataChange}
-            onProfileNudgeClick={() => setShowProfileEditDialog(true)} /> :
-
-
-          <Card className="border-0 shadow-lg">
-                        <CardContent className="text-center py-12">
-                            <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                            <h3 className="text-xl font-semibold text-gray-700 mb-2">לא נמצאו ספרים</h3>
-                            <p className="text-gray-500">נסו לשנות את הסינונים או לחפש משהו אחר</p>
-                            <Button variant="outline" onClick={resetFilters} className="mt-4">איפוס החיפוש</Button>
-                        </CardContent>
-                    </Card>
-          }
+              </div>
             </div>
+          </div>
+          <HintBar
+            user={user}
+            pageType="fair"
+            userListingsCount={myListings.filter(l => l.status === 'available').length}
+            userBasketCount={myBasketBookIds.length}
+            basketAvailabilitySummary={basketAvailabilitySummary}
+            loadingSummary={loadingSummary}
+            isMyBasketFilterActive={showMyBasketOnly}
+          />
+        </div>
 
-            {/* Profile Edit Dialog */}
-            <ProfileEditDialog
+        <div className="max-w-7xl mx-auto p-4 md:p-6">
+          <div className="block md:hidden">
+            <ActiveMobileFilters
+              filters={filters}
+              showMyBasketOnly={showMyBasketOnly}
+              showMyBooksOnly={showMyBooksOnly}
+              resetFilters={resetFilters}
+              GRADES={GRADES}
+              hasActiveFilters={hasActiveFilters()}
+            />
+          </div>
+          {!loading && (
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-800">
+                תוצאות ({totalAvailableListings} ספרים זמינים)
+              </h2>
+            </div>
+          )}
+          {loading ?
+            <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 text-blue-500 animate-spin" /></div> :
+            showMyBasketEmptyState ?
+              <Card className="border-0 shadow-lg">
+                <CardContent className="text-center py-12">
+                  <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-700 mb-2">הסל שלכם ריק</h3>
+                  <p className="text-gray-500">הוסיפו לסל ספרים שאתם מעוניינים להשיג</p>
+                  <Button variant="outline" onClick={() => window.location.href = createPageUrl("BookCatalog")} className="mt-4">
+                    חזרה לקטלוג
+                  </Button>
+                </CardContent>
+              </Card> :
+              showMyBooksOnly && filteredForDisplay.length === 0 ?
+                <Card className="border-0 shadow-lg text-center py-12">
+                  <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-700">לא פרסמת ספרים למכירה</h3>
+                  <p className="text-gray-500">התחילו על ידי הוספת ספר למכירה</p>
+                  <Button onClick={handleAddBookFromSearchEmptyState} className="mt-4">
+                    הוסף ספר למכירה
+                  </Button>
+                </Card> :
+                filteredForDisplay.length > 0 ?
+                  <SellerGroupList
+                    groupedResults={filteredForDisplay}
+                    GRADES={GRADES}
+                    user={user}
+                    showMyBooksOnly={showMyBooksOnly}
+                    onAddNewListingClick={handleAddBookFromSearchEmptyState}
+                    onFullDataRefresh={performSearch}
+                    onGranularUpdate={handleListingDataChange}
+                    onProfileNudgeClick={() => setShowProfileEditDialog(true)} /> :
+
+
+                  <Card className="border-0 shadow-lg">
+                    <CardContent className="text-center py-12">
+                      <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-xl font-semibold text-gray-700 mb-2">לא נמצאו ספרים</h3>
+                      <p className="text-gray-500">נסו לשנות את הסינונים או לחפש משהו אחר</p>
+                      <Button variant="outline" onClick={resetFilters} className="mt-4">איפוס החיפוש</Button>
+                    </CardContent>
+                  </Card>
+          }
+        </div>
+
+        {/* Profile Edit Dialog */}
+        <ProfileEditDialog
           open={showProfileCompletionDialog}
           onOpenChange={setShowProfileCompletionDialog}
           currentUser={user}
@@ -449,25 +442,24 @@ export default function BookFairPage() {
             window.location.href = createPageUrl("BookCatalog?source=add_book");
           }} />
 
-            {/* Profile Edit Dialog for Profile Nudge */}
-            <ProfileEditDialog
-              open={showProfileEditDialog}
-              onOpenChange={setShowProfileEditDialog}
-              currentUser={user}
-              onProfileUpdated={async () => {
-                // After profile is updated, refresh the BookFair page data
-                const freshUser = await User.me(); // Explicitly fetch fresh user data
-                setUser(freshUser); // Update the state
-                setShowProfileEditDialog(false); // Close the dialog
-                
-                // Notify the Layout component that the profile was updated
-                document.dispatchEvent(new CustomEvent('profile-updated'));
-              }}
-            />
+        {/* Profile Edit Dialog for Profile Nudge */}
+        <ProfileEditDialog
+          open={showProfileEditDialog}
+          onOpenChange={setShowProfileEditDialog}
+          currentUser={user}
+          onProfileUpdated={async () => {
+            // After profile is updated, refresh the BookFair page data
+            const freshUser = await User.me(); // Explicitly fetch fresh user data
+            setUser(freshUser); // Update the state
+            setShowProfileEditDialog(false); // Close the dialog
 
-        </div>
+            // Notify the Layout component that the profile was updated
+            document.dispatchEvent(new CustomEvent('profile-updated'));
+          }}
+        />
+      </div>
 
-        <MobileFilterSheet
+      <MobileFilterSheet
         open={isMobileFilterOpen}
         onOpenChange={setIsMobileFilterOpen}
         filters={filters}
@@ -476,7 +468,7 @@ export default function BookFairPage() {
         removeFilterGrade={removeGrade}
         showMyBooksOnly={showMyBooksOnly}
         handleMyBooksToggle={handleMyBooksToggle}
-        userListingsCount={myListings.filter(l => l.status === 'available').length}
+        userListingsCount={myListings.filter((l) => l.status === 'available').length}
         showMyBasketOnly={showMyBasketOnly}
         handleMyBasketToggle={handleMyBasketToggle}
         userBasketCount={myBasketBookIds.length}
@@ -485,6 +477,7 @@ export default function BookFairPage() {
         GRADES={GRADES}
         hasActiveFilters={hasActiveFilters()} />
 
-        </>);
+    </>
+  );
 
 }

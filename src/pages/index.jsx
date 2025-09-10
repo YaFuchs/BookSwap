@@ -8,6 +8,8 @@ import ContentManagerSettings from "./ContentManagerSettings";
 
 import FAQ from "./FAQ";
 
+import MyAccount from "./MyAccount";
+
 import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 
 const PAGES = {
@@ -19,6 +21,8 @@ const PAGES = {
     ContentManagerSettings: ContentManagerSettings,
     
     FAQ: FAQ,
+    
+    MyAccount: MyAccount,
     
 }
 
@@ -54,6 +58,8 @@ function PagesContent() {
                 <Route path="/ContentManagerSettings" element={<ContentManagerSettings />} />
                 
                 <Route path="/FAQ" element={<FAQ />} />
+                
+                <Route path="/MyAccount" element={<MyAccount />} />
                 
             </Routes>
         </Layout>

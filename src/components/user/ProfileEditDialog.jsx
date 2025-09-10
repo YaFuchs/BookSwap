@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { User } from "@/api/entities";
 import { Loader2, Info } from "lucide-react";
+import { useAppNotifications } from "../hooks/useAppNotifications";
 
 export default function ProfileEditDialog({ open, onOpenChange, currentUser, onProfileUpdated }) {
   const [formData, setFormData] = useState({
@@ -19,6 +20,8 @@ export default function ProfileEditDialog({ open, onOpenChange, currentUser, onP
   const [phoneError, setPhoneError] = useState("");
   const [loading, setLoading] = useState(false);
   const [isProfileIncomplete, setIsProfileIncomplete] = useState(false);
+
+  const notify = useAppNotifications();
 
   const isPhoneNumberComplete = phonePrefix.length === 3 && phoneNumber.length === 7;
   const isPhoneNumberEmpty = phonePrefix.length === 0 && phoneNumber.length === 0;
@@ -102,7 +105,7 @@ export default function ProfileEditDialog({ open, onOpenChange, currentUser, onP
     e.preventDefault();
     // When submitting, if fields are empty, we want to ensure the red borders appear.
     // The isProfileIncomplete state is only set on open, so we re-evaluate here for the submit action.
-    if (!formData.display_name.trim() || !formData.city.trim() || !isPhoneNumberComplete && !isPhoneNumberEmpty) {
+    if (!formData.display_name.trim() || !formData.city.trim() || (!isPhoneNumberComplete && !isPhoneNumberEmpty)) {
       setIsProfileIncomplete(true);
     }
 
@@ -120,13 +123,14 @@ export default function ProfileEditDialog({ open, onOpenChange, currentUser, onP
         ...formData,
         phone_e164: finalPhoneE164
       });
+      notify.success("הפרופיל עודכן!", "השינויים נשמרו בהצלחה.");
       if (onProfileUpdated) {
         await onProfileUpdated();
       }
       onOpenChange(false);
     } catch (error) {
       console.error("Failed to update profile:", error);
-      alert("שגיאה בעדכון הפרופיל: " + error.message);
+      notify.error("שגיאה בעדכון הפרופיל", error.message);
     } finally {
       setLoading(false);
     }
@@ -218,14 +222,15 @@ export default function ProfileEditDialog({ open, onOpenChange, currentUser, onP
                         </p>
           }
                     <DialogFooter>
-                        <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>ביטול</Button>
-                        <Button type="submit" disabled={!formData.display_name || loading || !isPhoneNumberValid}>
-                            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            שמירה
-                        </Button>
+                        <div className="flex gap-2 w-full justify-end">
+                            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={loading}>ביטול</Button>
+                            <Button type="submit" disabled={!formData.display_name || loading || !isPhoneNumberValid}>
+                                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                שמירה
+                            </Button>
+                        </div>
                     </DialogFooter>
                 </form>
             </DialogContent>
         </Dialog>);
-
 }

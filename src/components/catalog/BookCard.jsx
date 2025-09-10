@@ -1,14 +1,10 @@
-
-import React from "react";
+import React, { useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { BookOpen, Loader2, BookOpenCheck } from "lucide-react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { BookOpen } from "lucide-react";
+import BookAvailabilityBadge from "../common/BookAvailabilityBadge";
+import BookCardListingButtons from "./BookCardListingButtons";
+import BookCardBasketButtons from "./BookCardBasketButtons";
 
 export default function BookCard({ 
   book, 
@@ -20,7 +16,7 @@ export default function BookCard({
   actionLoading, 
   onRowClick, 
   onFastPublish, 
-  onEditListing, // Changed from onFastRemove
+  onEditListing,
   onAddToBasket, 
   onRemoveFromBasket 
 }) {
@@ -30,13 +26,37 @@ export default function BookCard({
   const isActionLoading = actionLoading[book.id];
   const isBasketActionLoading = actionLoading[`basket-${book.id}`];
 
+  // Memoize click handler to prevent unnecessary re-renders
+  const handleCardClick = useCallback((e) => {
+    if (e.target.closest('button, [data-radix-tooltip-trigger]')) return;
+    onRowClick(book);
+  }, [onRowClick, book]);
+
+  // Memoize action handlers to prevent unnecessary re-renders
+  const handlePublishClick = useCallback((e) => {
+    e.stopPropagation();
+    onFastPublish(book);
+  }, [onFastPublish, book]);
+
+  const handleEditClick = useCallback((e) => {
+    e.stopPropagation();
+    onEditListing(book);
+  }, [onEditListing, book]);
+
+  const handleAddBasketClick = useCallback((e) => {
+    e.stopPropagation();
+    onAddToBasket(book);
+  }, [onAddToBasket, book]);
+
+  const handleRemoveBasketClick = useCallback((e) => {
+    e.stopPropagation();
+    onRemoveFromBasket(book);
+  }, [onRemoveFromBasket, book]);
+
   return (
     <Card 
       className="shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-      onClick={(e) => {
-        if (e.target.closest('button, [data-radix-tooltip-trigger]')) return;
-        onRowClick(book);
-      }}
+      onClick={handleCardClick}
     >
       <CardContent className="p-4">
         <div className="flex gap-4">
@@ -84,14 +104,7 @@ export default function BookCard({
               {/* Availability */}
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600">זמינים ביריד:</span>
-                {count > 0 ? (
-                  <Badge className="bg-green-100 text-green-800 text-sm flex items-center gap-1.5 max-w-[65px] justify-center">
-                    <BookOpenCheck className="w-4 h-4" />
-                    <span className="truncate">{count}</span>
-                  </Badge>
-                ) : (
-                  <span className="text-sm text-gray-500">אין במלאי</span>
-                )}
+                <BookAvailabilityBadge count={count} />
               </div>
             </div>
           </div>
@@ -100,105 +113,18 @@ export default function BookCard({
         {/* Action Buttons */}
         {user && (
           <div className="flex items-center justify-center gap-2 mt-4 pt-4 border-t border-gray-100">
-            {/* Listing Actions */}
-            {bookListed ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onEditListing(book); // Changed from onFastRemove
-                    }}
-                    disabled={isActionLoading}
-                    className="bg-green-600 hover:bg-green-700 text-xs flex-1" // Changed variant
-                  >
-                    {isActionLoading ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : (
-                      "ערוך פרסום" // Changed text
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="max-w-xs text-right">ניתן לערוך את פרטי המודעה</p> {/* Changed tooltip text */}
-                </TooltipContent>
-              </Tooltip>
-            ) : (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onFastPublish(book);
-                    }}
-                    disabled={isActionLoading}
-                    className="bg-blue-600 hover:bg-blue-700 text-xs flex-1"
-                  >
-                    {isActionLoading ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : (
-                      "פרסם ביריד"
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="max-w-xs text-right">אם הספר הזה נמצא ברשותך, את.ה יכול.ה לפרסם אותו ביריד הספרים הדיגיטלי וכך להציע אותו למסירה או מכירה לאחרים</p>
-                </TooltipContent>
-              </Tooltip>
-            )}
-
-            {/* Basket Actions */}
-            {bookInBasket ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemoveFromBasket(book);
-                    }}
-                    disabled={isBasketActionLoading}
-                    className="text-xs border-orange-300 text-orange-600 hover:bg-orange-50 flex-1"
-                  >
-                    {isBasketActionLoading ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : (
-                      "הסר מהסל"
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="max-w-xs text-right">הסר ספר זה מרשימת הספרים שאני מעוניין לקנות</p>
-                </TooltipContent>
-              </Tooltip>
-            ) : (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onAddToBasket(book);
-                    }}
-                    disabled={isBasketActionLoading}
-                    className="text-xs border-green-300 text-green-600 hover:bg-green-50 flex-1"
-                  >
-                    {isBasketActionLoading ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : (
-                      "הוסף לסל"
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="max-w-xs text-right">הוסף ספר זה לרשימת הספרים שאני מעוניינ.ת לקנות</p>
-                </TooltipContent>
-              </Tooltip>
-            )}
+            <BookCardListingButtons
+              isListed={bookListed}
+              isLoading={isActionLoading}
+              onEdit={handleEditClick}
+              onPublish={handlePublishClick}
+            />
+            <BookCardBasketButtons
+              isInBasket={bookInBasket}
+              isLoading={isBasketActionLoading}
+              onAddToBasket={handleAddBasketClick}
+              onRemoveFromBasket={handleRemoveBasketClick}
+            />
           </div>
         )}
         

@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import ProfileEditDialog from "../components/user/ProfileEditDialog";
 import FeedbackDialog from "../components/user/FeedbackDialog";
+import { AppStoreProvider, useAppStore } from "../components/stores/useAppStore";
 
 const AuthWrapper = ({ children, currentPageName }) => {
   const [user, setUser] = React.useState(null);
@@ -46,25 +47,43 @@ const AuthWrapper = ({ children, currentPageName }) => {
     );
   }
   
-  return <AppLayout user={user} currentPageName={currentPageName} onProfileUpdate={checkAuth}>{children}</AppLayout>;
+  return (
+    <AppStoreProvider>
+      <AppLayoutWithStore user={user} currentPageName={currentPageName} onProfileUpdate={checkAuth}>
+        {children}
+      </AppLayoutWithStore>
+    </AppStoreProvider>
+  );
 };
 
-const AppLayout = ({ children, user, currentPageName, onProfileUpdate }) => {
+// Renamed AppLayout to AppLayoutWithStore as per the outline's usage
+const AppLayoutWithStore = ({ children, user, currentPageName, onProfileUpdate }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(true);
   const [showProfileEditDialog, setShowProfileEditDialog] = React.useState(false);
   const [showFeedbackDialog, setShowFeedbackDialog] = React.useState(false);
-  const [areFiltersActive, setAreFiltersActive] = React.useState(false);
+  const [pageMobileFilterOpener, setPageMobileFilterOpener] = React.useState(null);
+
+  // Get the store values and calculate active filters in useMemo
+  const store = useAppStore();
+  const areFiltersActive = React.useMemo(() => {
+    // Add safety checks when destructuring properties from the store
+    const filters = store?.filters || {};
+    const showMyBasketOnly = store?.showMyBasketOnly || false;
+    const showMyBooksOnly = store?.showMyBooksOnly || false;
+
+    return (
+      (filters.grade_numbers && filters.grade_numbers.length > 0) ||
+      (filters.title_q && filters.title_q.trim().length > 0) ||
+      showMyBasketOnly ||
+      showMyBooksOnly
+    );
+  }, [store]);
 
   const isProfileIncomplete = !user?.display_name || user.display_name.trim() === '' || !user?.phone_e164 || user.phone_e164.trim() === '' || !user?.city || user.city.trim() === '' || user?.show_phone === false;
 
   React.useEffect(() => {
-    // Listen for filter status updates from pages
-    const handleFilterStatusUpdate = (event) => {
-      setAreFiltersActive(event.detail.hasActiveFilters);
-    };
-
     // Listen for profile update events from other components
     const handleProfileUpdate = () => {
       if (onProfileUpdate) {
@@ -72,17 +91,12 @@ const AppLayout = ({ children, user, currentPageName, onProfileUpdate }) => {
       }
     };
 
-    document.addEventListener('filter-status-update', handleFilterStatusUpdate);
     document.addEventListener('profile-updated', handleProfileUpdate);
 
-    // Reset filter status when navigating to different pages
-    setAreFiltersActive(false);
-
     return () => {
-      document.removeEventListener('filter-status-update', handleFilterStatusUpdate);
       document.removeEventListener('profile-updated', handleProfileUpdate);
     };
-  }, [location.pathname, onProfileUpdate]);
+  }, [onProfileUpdate]);
 
   const handleLogout = async () => {
     await User.logout();
@@ -110,6 +124,10 @@ const AppLayout = ({ children, user, currentPageName, onProfileUpdate }) => {
     if (location.pathname === createPageUrl("FAQ")) {
       return "שאלות נפוצות";
     }
+
+    if (location.pathname === createPageUrl("MyAccount")) {
+      return "הגדרות חשבון";
+    }
     
     // Handle content manager settings page
     if (location.pathname === createPageUrl("ContentManagerSettings")) {
@@ -129,7 +147,9 @@ const AppLayout = ({ children, user, currentPageName, onProfileUpdate }) => {
 
   const handleMobileFilterClick = () => {
     // Dispatch a custom event that the page components can listen for.
-    document.dispatchEvent(new CustomEvent('open-mobile-filters'));
+    if (pageMobileFilterOpener) {
+      pageMobileFilterOpener();
+    }
   };
 
   // Function to render sidebar content, adaptable for mobile (Sheet) or desktop
@@ -267,9 +287,13 @@ const AppLayout = ({ children, user, currentPageName, onProfileUpdate }) => {
             </div>
 
             <div className={`flex items-center ${isMobile ? 'gap-3' : (isSidebarCollapsed ? 'justify-center' : 'gap-3')}`}>
-              <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center flex-shrink-0">
-                <UserIcon className="w-4 h-4 text-gray-600" />
-              </div>
+              <SheetClose asChild={isMobile}>
+                  <Link to={createPageUrl("MyAccount")} className="cursor-pointer hover:opacity-80 transition-opacity">
+                    <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center flex-shrink-0">
+                      <UserIcon className="w-4 h-4 text-gray-600" />
+                    </div>
+                  </Link>
+              </SheetClose>
               <div className={`flex-1 min-w-0 transition-all duration-300 whitespace-nowrap overflow-hidden ${isMobile ? '' : (isSidebarCollapsed ? 'opacity-0 max-w-0' : 'opacity-100 max-w-full')}`}>
                 <p className="font-medium text-gray-900 text-sm truncate">
                   {user?.display_name || user?.full_name || 'משתמש'}
@@ -397,7 +421,7 @@ const AppLayout = ({ children, user, currentPageName, onProfileUpdate }) => {
                   </div>
                 </header>
                 <div className="flex-1 overflow-auto">
-                  {React.cloneElement(children, { onGlobalProfileUpdate: onProfileUpdate })}
+                  {React.cloneElement(children, { onGlobalProfileUpdate: onProfileUpdate, setPageMobileFilterOpener: setPageMobileFilterOpener })}
                 </div>
               </main>
             </div>

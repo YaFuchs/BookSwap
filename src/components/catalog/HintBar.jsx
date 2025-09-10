@@ -1,9 +1,9 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { Info, Loader2, Store, Library, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import useAppStore from '../stores/useAppStore';
 
 // Hebrew grammar helpers
 const heSellersFragment = (n) => {
@@ -28,6 +28,8 @@ const heUnavailableWord = (count) => {
 };
 
 export default function HintBar({ user, userListingsCount, userBasketCount, basketAvailabilitySummary, loadingSummary, pageType = 'catalog', isMyBasketFilterActive = false }) {
+  const { setShowMyBasketOnly } = useAppStore();
+  
   if (!user) return null;
 
   let hintContent = null;
@@ -93,7 +95,7 @@ export default function HintBar({ user, userListingsCount, userBasketCount, bask
         } else if (availableBooksCount > 0 && !isMyBasketFilterActive) {
           showCta = true;
           ctaText = 'עבור לסל שלי';
-          ctaLink = null; // This will be handled by custom event
+          ctaLink = null; // This will be handled by custom function
           ctaIcon = <ShoppingCart className="w-3 h-3" />;
           ctaClassName = "bg-orange-500 hover:bg-orange-600";
         }
@@ -120,7 +122,7 @@ export default function HintBar({ user, userListingsCount, userBasketCount, bask
     (userBasketCount > 0 && !loadingSummary && basketAvailabilitySummary.availableBooksCount === 0);
 
   const handleMyBasketClick = () => {
-    document.dispatchEvent(new CustomEvent('activate-my-basket-filter'));
+    setShowMyBasketOnly(true);
   };
 
   return (

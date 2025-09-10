@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Search as SearchIcon, RotateCcw, ChevronDown, ChevronUp, X } from "lucide-react";
+import { useAppStore } from '@/components/stores/useAppStore';
 
 export default function MobileFilterSheet({
   open,
@@ -34,8 +35,21 @@ export default function MobileFilterSheet({
 }) {
   const [isGradeSelectionExpanded, setIsGradeSelectionExpanded] = React.useState(false);
 
+  // Get the debounced setter from store for consistent behavior
+  const { setTitleQDebounced } = useAppStore();
+
   const handleResetAndClose = () => {
     resetFilters();
+    onOpenChange(false);
+  };
+
+  const handleMyBooksClick = () => {
+    handleMyBooksToggle();
+    onOpenChange(false);
+  };
+
+  const handleMyBasketClick = () => {
+    handleMyBasketToggle();
     onOpenChange(false);
   };
 
@@ -58,7 +72,7 @@ export default function MobileFilterSheet({
             <Input
               placeholder="חפשו שם ספר..."
               value={filters.title_q}
-              onChange={(e) => setFilters((p) => ({ ...p, title_q: e.target.value }))}
+              onChange={(e) => setTitleQDebounced(e.target.value)}
               className="pr-10 w-full" />
 
           </div>
@@ -119,7 +133,7 @@ export default function MobileFilterSheet({
           {user &&
             <div className="grid grid-cols-2 gap-2">
               <Button
-                onClick={handleMyBooksToggle}
+                onClick={handleMyBooksClick}
                 className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold transition-colors ${
                   showMyBooksOnly ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`
                 }>
@@ -127,7 +141,7 @@ export default function MobileFilterSheet({
                 ספרים שפירסמתי ({userListingsCount})
               </Button>
               <Button
-                onClick={handleMyBasketToggle}
+                onClick={handleMyBasketClick}
                 className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold transition-colors ${
                   showMyBasketOnly ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`
                 }>
