@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Badge } from "@/components/ui/badge";
 import SellerGroupList from "../components/search/SellerGroupList";
 import { BookSearch } from "../components/integrations/BookSearch";
-import { GRADES } from "../components/constants/grades";
+import { fetchGrades } from "../components/constants/grades"; // Changed from GRADES to fetchGrades
 import { User, Basket, Listing } from "@/api/entities";
 import { createPageUrl } from "@/utils";
 import ProfileEditDialog from "../components/user/ProfileEditDialog";
@@ -40,6 +41,7 @@ export default function BookFairPage({ setPageMobileFilterOpener }) {
   const [showProfileCompletionDialog, setShowProfileCompletionDialog] = useState(false);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
   const [showProfileEditDialog, setShowProfileEditDialog] = useState(false);
+  const [dynamicGrades, setDynamicGrades] = useState([]); // New state for dynamic grades
 
   // New state variables for basket availability summary
   const [basketAvailabilitySummary, setBasketAvailabilitySummary] = useState({ availableBooksCount: 0, uniqueSellersCount: 0 });
@@ -75,20 +77,23 @@ export default function BookFairPage({ setPageMobileFilterOpener }) {
     }
   }, []);
 
-  // useEffect for initial user data
+  // useEffect for initial user and grades data
   useEffect(() => {
-    const loadUserOnly = async () => {
-      try {
-        const currentUser = await User.me();
-        setUser(currentUser);
-      } catch (error) {
-        setUser(null);
-        // Clear user-specific data if user fetch fails
-        setMyListings([]);
-        setMyBasketBookIds([]);
-      }
+    const loadInitialData = async () => {
+        try {
+            const [currentUser, gradesData] = await Promise.all([
+                User.me().catch(() => null), // Catch user fetch errors gracefully
+                fetchGrades()
+            ]);
+            setUser(currentUser);
+            setDynamicGrades(gradesData || []);
+        } catch (error) {
+            console.error("Error loading initial page data:", error);
+            setUser(null);
+            setDynamicGrades([]);
+        }
     };
-    loadUserOnly();
+    loadInitialData();
   }, []); // Empty dependency array means this runs once on mount
   
   // useEffect to register the mobile filter opener with parent
@@ -285,7 +290,7 @@ export default function BookFairPage({ setPageMobileFilterOpener }) {
                     <div className="space-y-2">
                       <h4 className="font-medium text-right">בחירת שכבות לימוד</h4>
                       <div className="grid grid-cols-3 gap-2">
-                        {GRADES.map((grade) =>
+                        {dynamicGrades.map((grade) => // Using dynamicGrades
                           <div key={grade.id} className="flex items-center gap-2 flex-row-reverse">
                             <Checkbox
                               id={`grade-${grade.id}`}
@@ -306,7 +311,7 @@ export default function BookFairPage({ setPageMobileFilterOpener }) {
                 {filters.grade_numbers.length > 0 &&
                   <div className="flex flex-wrap gap-2">
                     {filters.grade_numbers.map((gradeId) => {
-                      const grade = GRADES.find((g) => g.id === gradeId);
+                      const grade = dynamicGrades.find((g) => g.id === gradeId); // Using dynamicGrades
                       return grade ?
                         <Badge key={gradeId} variant="secondary" className="flex items-center gap-1">
                           {grade.name.replace('כיתה ', '')}
@@ -376,7 +381,7 @@ export default function BookFairPage({ setPageMobileFilterOpener }) {
               showMyBasketOnly={showMyBasketOnly}
               showMyBooksOnly={showMyBooksOnly}
               resetFilters={resetFilters}
-              GRADES={GRADES}
+              GRADES={dynamicGrades} // Using dynamicGrades
               hasActiveFilters={hasActiveFilters()}
             />
           </div>
@@ -412,7 +417,7 @@ export default function BookFairPage({ setPageMobileFilterOpener }) {
                 filteredForDisplay.length > 0 ?
                   <SellerGroupList
                     groupedResults={filteredForDisplay}
-                    GRADES={GRADES}
+                    GRADES={dynamicGrades} // Using dynamicGrades
                     user={user}
                     showMyBooksOnly={showMyBooksOnly}
                     onAddNewListingClick={handleAddBookFromSearchEmptyState}
@@ -474,7 +479,7 @@ export default function BookFairPage({ setPageMobileFilterOpener }) {
         userBasketCount={myBasketBookIds.length}
         resetFilters={resetFilters}
         user={user}
-        GRADES={GRADES}
+        GRADES={dynamicGrades} // Using dynamicGrades
         hasActiveFilters={hasActiveFilters()} />
 
     </>

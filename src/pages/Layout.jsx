@@ -153,8 +153,29 @@ const AppLayoutWithStore = ({ children, user, currentPageName, onProfileUpdate }
   };
 
   // Function to render sidebar content, adaptable for mobile (Sheet) or desktop
-  const sidebarContent = (isMobile = false) => (
-    <div className="flex flex-col h-full bg-white">
+  const sidebarContent = (isMobile = false) => {
+    const isMyAccountActive = location.pathname === createPageUrl("MyAccount");
+
+    const myAccountLinkContent = (
+      <Link
+        to={createPageUrl("MyAccount")}
+        className={`hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200 rounded-lg flex items-center py-2 w-full ${isMobile ? 'gap-3 px-3' : (isSidebarCollapsed ? 'justify-center' : 'gap-3 px-3')} ${
+          isMyAccountActive ? 'bg-blue-50 text-blue-700' : ''
+        }`}
+      >
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${isMyAccountActive ? 'bg-blue-200' : 'bg-gray-200'}`}>
+          <UserIcon className="w-4 h-4" /> {/* The text color will be inherited */}
+        </div>
+        <div className={`flex-1 min-w-0 transition-all duration-300 whitespace-nowrap overflow-hidden ${isMobile ? '' : (isSidebarCollapsed ? 'opacity-0 max-w-0' : 'opacity-100 max-w-full')}`}>
+          <p className="font-medium text-sm truncate">
+            {user?.display_name || user?.full_name || 'משתמש'}
+          </p>
+        </div>
+      </Link>
+    );
+
+    return (
+      <div className="flex flex-col h-full bg-white">
       <div className="border-b border-gray-200 p-4">
           <div className={`flex items-center ${isMobile ? 'gap-3' : (isSidebarCollapsed ? 'justify-center' : 'gap-3')}`}>
             <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -286,20 +307,11 @@ const AppLayoutWithStore = ({ children, user, currentPageName, onProfileUpdate }
               )}
             </div>
 
-            <div className={`flex items-center ${isMobile ? 'gap-3' : (isSidebarCollapsed ? 'justify-center' : 'gap-3')}`}>
-              <SheetClose asChild={isMobile}>
-                  <Link to={createPageUrl("MyAccount")} className="cursor-pointer hover:opacity-80 transition-opacity">
-                    <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center flex-shrink-0">
-                      <UserIcon className="w-4 h-4 text-gray-600" />
-                    </div>
-                  </Link>
-              </SheetClose>
-              <div className={`flex-1 min-w-0 transition-all duration-300 whitespace-nowrap overflow-hidden ${isMobile ? '' : (isSidebarCollapsed ? 'opacity-0 max-w-0' : 'opacity-100 max-w-full')}`}>
-                <p className="font-medium text-gray-900 text-sm truncate">
-                  {user?.display_name || user?.full_name || 'משתמש'}
-                </p>
-              </div>
-            </div>
+            {isMobile ? (
+              <SheetClose asChild>{myAccountLinkContent}</SheetClose>
+            ) : (
+              myAccountLinkContent
+            )}
 
             {(isMobile || isSidebarCollapsed) ? ( 
               <div className={`flex ${isMobile ? 'gap-2' : 'justify-center'}`}>
@@ -359,8 +371,9 @@ const AppLayoutWithStore = ({ children, user, currentPageName, onProfileUpdate }
             )}
           </div>
         </div>
-    </div>
-  );
+      </div>
+    );
+  };
 
   return (
     <>
@@ -369,6 +382,22 @@ const AppLayoutWithStore = ({ children, user, currentPageName, onProfileUpdate }
           :root { --sidebar-width: 16rem; --header-height: 4rem; }
           .sidebar-content { border-right: 1px solid rgb(229 231 235); border-left: none; }
           body { font-family: 'Segoe UI', 'Heebo', sans-serif; }
+          
+          /* Fix Switch component RTL behavior */
+          [dir="rtl"] [data-state="checked"] .switch-thumb {
+            transform: translateX(-1.25rem);
+          }
+          [dir="rtl"] [data-state="unchecked"] .switch-thumb {
+            transform: translateX(0);
+          }
+          
+          /* More specific selectors for shadcn Switch component */
+          [dir="rtl"] button[role="switch"][data-state="checked"] > span {
+            transform: translateX(-1.25rem) !important;
+          }
+          [dir="rtl"] button[role="switch"][data-state="unchecked"] > span {
+            transform: translateX(0) !important;
+          }
         `}</style>
 
         {/* Use Sheet for mobile sidebar functionality */}

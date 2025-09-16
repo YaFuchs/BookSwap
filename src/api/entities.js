@@ -7,6 +7,10 @@ export const Listing = base44.entities.Listing;
 
 export const Basket = base44.entities.Basket;
 
+export const Subject = base44.entities.Subject;
+
+export const GradeLevel = base44.entities.GradeLevel;
+
 
 
 // auth sdk:

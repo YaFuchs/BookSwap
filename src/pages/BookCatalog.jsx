@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Checkbox } from "@/components/ui/checkbox";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import BookDetailsModal from "../components/catalog/BookDetailsModal";
-import { GRADES } from "../components/constants/grades";
+import { fetchGrades } from "../components/constants/grades";
 import HintBar from "../components/catalog/HintBar";
 import MobileFilterSheet from "../components/common/MobileFilterSheet";
 import BookCard from "../components/catalog/BookCard";
@@ -39,6 +39,7 @@ export default function BookCatalogPage({ onGlobalProfileUpdate = async () => {}
   
   const [user, setUser] = useState(null);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+  const [dynamicGrades, setDynamicGrades] = useState([]);
 
   const notify = useAppNotifications();
 
@@ -55,8 +56,8 @@ export default function BookCatalogPage({ onGlobalProfileUpdate = async () => {}
     debouncedRefreshCountsAndListings,
     loadData,
     refreshDataWithoutLoading,
-    updateBookInList, // Get the new function
-    removeBookFromList, // Get the new function
+    updateBookInList,
+    removeBookFromList,
   } = useBookCatalogData(user, notify);
 
   // Use the custom hook for modal management - now passing user
@@ -114,17 +115,24 @@ export default function BookCatalogPage({ onGlobalProfileUpdate = async () => {}
       showMyBasketOnly);
   }, [filters.grade_numbers, filters.title_q, showMyBooksOnly, showMyBasketOnly]);
 
-  // Initial user load effect - only run once
+  // Initial data load effect - user and grades
   useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const currentUser = await User.me();
-        setUser(currentUser);
-      } catch (error) {
-        setUser(null);
-      }
+    const loadInitialData = async () => {
+        try {
+            const [currentUser, gradesData] = await Promise.all([
+                User.me().catch(() => null),
+                fetchGrades()
+            ]);
+            setUser(currentUser);
+            setDynamicGrades(gradesData || []);
+        } catch (error) {
+            console.error("Error loading initial page data:", error);
+            setUser(null);
+            // fetchGrades handles its own fallback, so we just set an empty array on error.
+            setDynamicGrades([]);
+        }
     };
-    loadUser();
+    loadInitialData();
   }, []);
 
   useEffect(() => {
@@ -155,7 +163,7 @@ export default function BookCatalogPage({ onGlobalProfileUpdate = async () => {}
       filters.grade_numbers.includes(gradeId) ?
       filters.grade_numbers.filter((id) => id !== gradeId) :
       [...filters.grade_numbers, gradeId] :
-      [gradeId] // If not an array, initialize with the current gradeId
+      [gradeId]
     });
   };
 
@@ -164,7 +172,7 @@ export default function BookCatalogPage({ onGlobalProfileUpdate = async () => {}
       ...filters,
       grade_numbers: Array.isArray(filters.grade_numbers) ?
       filters.grade_numbers.filter((id) => id !== gradeId) :
-      [] // If not an array, reset to empty array
+      []
     });
   };
 
@@ -195,18 +203,18 @@ export default function BookCatalogPage({ onGlobalProfileUpdate = async () => {}
 
   // New generic handler for any data change in BookDetailsModal that requires a refresh
   const handleBookCatalogDataChange = useCallback(() => {
-    refreshDataWithoutLoading(); // Use the lightweight refresh instead of loadData
+    refreshDataWithoutLoading();
   }, [refreshDataWithoutLoading]);
 
   // --- New Granular Update Handlers ---
   const handleBookUpdated = useCallback((updatedBook) => {
     updateBookInList(updatedBook);
-    setShowBookModal(false); // Close the modal on success
+    setShowBookModal(false);
   }, [updateBookInList, setShowBookModal]);
 
   const handleBookDeleted = useCallback((bookId) => {
     removeBookFromList(bookId);
-    setShowBookModal(false); // Close the modal on success
+    setShowBookModal(false);
   }, [removeBookFromList, setShowBookModal]);
 
   const isBookListed = useCallback((bookId) => {
@@ -295,7 +303,7 @@ export default function BookCatalogPage({ onGlobalProfileUpdate = async () => {}
                     <div className="space-y-2">
                       <h4 className="font-medium text-right">בחירת שכבות לימוד</h4>
                       <div className="grid grid-cols-3 gap-2">
-                        {GRADES.map((grade) =>
+                        {dynamicGrades.map((grade) =>
                         <div key={grade.id} className="flex items-center gap-2 flex-row-reverse">
                             <Checkbox id={`filter-grade-${grade.id}`} checked={filters.grade_numbers.includes(grade.id)} onCheckedChange={() => handleFilterGradeToggle(grade.id)} />
                             <label htmlFor={`filter-grade-${grade.id}`} className="text-sm cursor-pointer">{grade.name.replace('כיתה ', '')}</label>
@@ -309,7 +317,7 @@ export default function BookCatalogPage({ onGlobalProfileUpdate = async () => {}
                 {Array.isArray(filters.grade_numbers) && filters.grade_numbers.length > 0 &&
                 <div className="flex flex-wrap gap-2">
                     {filters.grade_numbers.map((gradeId) => {
-                    const grade = GRADES.find((g) => g.id === gradeId);
+                    const grade = dynamicGrades.find((g) => g.id === gradeId);
                     return grade ? <Badge key={gradeId} variant="secondary" className="flex items-center gap-1">{grade.name.replace('כיתה ', '')}<X className="w-3 h-3 cursor-pointer hover:text-red-500" onClick={() => removeFilterGrade(gradeId)} /></Badge> : null;
                   })}
                   </div>
@@ -373,7 +381,7 @@ export default function BookCatalogPage({ onGlobalProfileUpdate = async () => {}
             showEmptyCatalogState={showEmptyCatalogState}
             showNoResultsState={showNoResultsState}
             resetFilters={resetFilters}
-            GRADES={GRADES}
+            GRADES={dynamicGrades}
           />
 
           {/* Mobile Card View - visible only on mobile */}
@@ -383,7 +391,7 @@ export default function BookCatalogPage({ onGlobalProfileUpdate = async () => {}
               showMyBasketOnly={showMyBasketOnly}
               showMyBooksOnly={showMyBooksOnly}
               resetFilters={resetFilters}
-              GRADES={GRADES}
+              GRADES={dynamicGrades}
               hasActiveFilters={hasActiveFilters()}
             />
             <div className="mb-4 flex items-center justify-between">
@@ -391,7 +399,7 @@ export default function BookCatalogPage({ onGlobalProfileUpdate = async () => {}
             </div>
             <BookCatalogMobileCards
               filteredBooks={filteredBooks}
-              GRADES={GRADES}
+              GRADES={dynamicGrades}
               user={user}
               availableCounts={availableCounts}
               isBookListed={isBookListed}
@@ -415,10 +423,10 @@ export default function BookCatalogPage({ onGlobalProfileUpdate = async () => {}
           book={selectedBook}
           open={showBookModal}
           onOpenChange={setShowBookModal}
-          GRADES={GRADES}
+          GRADES={dynamicGrades}
           user={user}
-          onBookDeleted={handleBookDeleted} // Use the new granular handler
-          onBookUpdated={handleBookUpdated} // Pass the new granular handler
+          onBookDeleted={handleBookDeleted}
+          onBookUpdated={handleBookUpdated}
           modalAction={modalAction}
           onBookPublished={handleModalPublishSuccessWrapper}
           onBookCatalogDataChange={handleBookCatalogDataChange}
@@ -469,7 +477,7 @@ export default function BookCatalogPage({ onGlobalProfileUpdate = async () => {}
         userBasketCount={userBasketBooks.length}
         resetFilters={resetFilters}
         user={user}
-        GRADES={GRADES}
+        GRADES={dynamicGrades}
         hasActiveFilters={hasActiveFilters()} />
     </>
   );
