@@ -17,7 +17,7 @@ jobs:
     steps:
       - name: Call processEmailDigestJobs function
         run: |
-          BASE_URL="https://base44.app/api/apps/${BASE44_APP_ID}/functions"
+          BASE_URL="https://book-swap-673ff6bd.base44.app/api/apps/68a482413e553142673ff6bd/functions/"
           FUNCTION_URL="${BASE_URL}/processEmailDigestJobs"
 
           echo "Calling processEmailDigestJobs at ${FUNCTION_URL}"
