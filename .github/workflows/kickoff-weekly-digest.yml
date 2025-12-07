@@ -1,0 +1,40 @@
+name: Kickoff Weekly Availability Digest
+
+on:
+  schedule:
+    # Every Sunday at 04:00 UTC
+    # (roughly 06:00–07:00 Israel time depending on DST; adjust as needed)
+    - cron: "0 4 * * 0"
+  workflow_dispatch: {} # allow manual run from GitHub UI
+
+jobs:
+  kickoff-weekly-digest:
+    runs-on: ubuntu-latest
+
+    env:
+      BASE44_APP_ID: ${{ secrets.BASE44_APP_ID }}
+      BASE44_JOB_SECRET: ${{ secrets.BASE44_JOB_SECRET }}
+
+    steps:
+      - name: Call kickoffWeeklyAvailabilityDigest function
+        run: |
+          BASE_URL="https://base44.app/api/apps/${BASE44_APP_ID}/functions"
+          FUNCTION_URL="${BASE_URL}/kickoffWeeklyAvailabilityDigest"
+
+          echo "Calling kickoffWeeklyAvailabilityDigest at ${FUNCTION_URL}"
+
+          # Use POST with empty JSON body
+          HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" \
+            -X POST "${FUNCTION_URL}" \
+            -H "Content-Type: application/json" \
+            -H "X-JOB-SECRET: ${BASE44_JOB_SECRET}" \
+            -d '{}')
+
+          echo "HTTP status: ${HTTP_CODE}"
+          echo "Response:"
+          cat response.json || true
+
+          if [ "$HTTP_CODE" -ge 400 ]; then
+            echo "kickoffWeeklyAvailabilityDigest failed with HTTP ${HTTP_CODE}"
+            exit 1
+          fi
