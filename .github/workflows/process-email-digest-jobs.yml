@@ -1,0 +1,40 @@
+name: Process Email Digest Jobs
+
+on:
+  schedule:
+    # Every 5 minutes
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {} # allow manual run
+
+jobs:
+  process-email-digest-jobs:
+    runs-on: ubuntu-latest
+
+    env:
+      BASE44_APP_ID: ${{ secrets.BASE44_APP_ID }}
+      BASE44_JOB_SECRET: ${{ secrets.BASE44_JOB_SECRET }}
+
+    steps:
+      - name: Call processEmailDigestJobs function
+        run: |
+          BASE_URL="https://base44.app/api/apps/${BASE44_APP_ID}/functions"
+          FUNCTION_URL="${BASE_URL}/processEmailDigestJobs"
+
+          echo "Calling processEmailDigestJobs at ${FUNCTION_URL}"
+
+          HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" \
+            -X POST "${FUNCTION_URL}" \
+            -H "Content-Type: application/json" \
+            -H "X-JOB-SECRET: ${BASE44_JOB_SECRET}" \
+            -d '{}')
+
+          echo "HTTP status: ${HTTP_CODE}"
+          echo "Response:"
+          cat response.json || true
+
+          # For the worker, it's okay if there are no jobs — that should still be 200.
+          # Treat only 5xx or explicit errors as failures.
+          if [ "$HTTP_CODE" -ge 500 ]; then
+            echo "processEmailDigestJobs failed with HTTP ${HTTP_CODE}"
+            exit 1
+          fi
